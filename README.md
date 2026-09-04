@@ -12,22 +12,29 @@ demonstrating how deterministic and LLM-driven steps mix in a single graph.
 
 | Node | Type | What it does |
 |---|---|---|
-| `classify` | LLM | Reads the ticket and decides `billing` or `technical` |
+| `classify` | LLM | Reads the ticket and decides `billing`, `technical`, or `unclear` |
 | `billing` | LLM | Drafts a billing-specialist reply |
 | `technical` | LLM | Drafts a technical-specialist reply |
+| `unclear` | deterministic (no model call) | Asks for clarification instead of guessing a category |
 | `format_response` | deterministic (no model call) | Wraps the draft into the final formatted reply |
 
 **Shape of the graph:**
 
 ```
-START -> classify --(conditional edge on category)--> billing ------> format_response -> END
-                                                 \--> technical --/
+                          /--> billing -----\
+START -> classify --(conditional edge)--> technical --> format_response -> END
+                          \--> unclear -----/
 ```
 
 `classify` is followed by a **conditional edge** (`route_by_category`) that reads
-`state["category"]` and picks which branch runs next. Both branches converge back into the same
-`format_response` node before the graph ends — showing a node doesn't have to be an "agent," it
-can just be plain code, and multiple paths can merge into one downstream node.
+`state["category"]` and picks which branch runs next. All three branches converge back into the
+same `format_response` node before the graph ends — showing a node doesn't have to be an "agent,"
+it can just be plain code, and multiple paths can merge into one downstream node.
+
+The `unclear` branch exists because the classifier was originally forced to pick `billing` or
+`technical` even for input that isn't a real support ticket (e.g. `"Today is Monday"`) — it would
+confidently invent a plausible-sounding but fabricated reply. `unclear` gives it a legitimate third
+option and a fixed clarification response instead of a hallucinated one.
 
 ## Setup
 
@@ -76,6 +83,16 @@ Hi,
 Thanks for reporting this. Try clearing the app cache, confirming you're on the latest
 version, and testing on a different network. If it persists, send us your device model,
 OS version, and app version so we can investigate further.
+
+-- Support Team
+---
+Ticket: Today is Monday
+Category: unclear
+[UNCLEAR TEAM]
+
+Thanks for reaching out. We couldn't tell from your message whether this is a billing or
+technical issue, or whether it's a support request at all. Could you share more detail about
+what you need help with?
 
 -- Support Team
 ---
